@@ -13,6 +13,7 @@
 #include <hash.h>
 #include <validation.h>
 #include <merkleblock.h>
+#include <messaging/messaging.h>
 #include <netmessagemaker.h>
 #include <netbase.h>
 #include <policy/fees.h>
@@ -3213,6 +3214,75 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             }
         }
         return true;
+    }
+
+    if (strCommand == NetMsgType::MESSAGING)
+    {
+        // if the peer doesn't offer the service it shouldn't be sending this message
+        if (!(pfrom->GetLocalServices() & NODE_MESSAGING))
+        {
+            pfrom->fDisconnect = true;
+            return false;
+        }
+
+        CMessaging messaging;
+        vRecv >> messaging;
+
+        int nTimeToLive;
+        messaging.GetTimeToLive(&nTimeToLive);
+        if (nTimeToLive < 0)
+        {
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 10, strprintf("message was expired for %d seconds", nTimeToLive));
+            return false;
+        }
+
+        std::string error = "";
+        CFundingTransaction senderFundingTx;
+        if (!messaging.pSender.ValidateFundingTx(senderFundingTx, error))
+        {
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 20, strprintf("locking tx for sender was invalid = %s", nTimeToLive));
+            return false;
+        }
+        
+        CFundingTransaction recipientFundingTx;
+        if (messaging.pRecipient.ValidateFundingTx(recipientFundingTx, error))
+        {
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 10, strprintf("locking tx for recipient was invalid = %s", nTimeToLive));
+            return false;
+        }
+
+        if (recipientFundingTx.nLockedFor > senderFundingTx.nLockedFor)
+        {
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 50, "sender's locktime is smaller than recipient's");
+            return false;
+        }
+
+        if (recipientFundingTx.pLockedAmount > senderFundingTx.pLockedAmount)
+        {
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 50, "sender's locked amount is smaller than recipient's");
+            return false;
+        }
+
+        if (!messaging.CheckSignature())
+        {
+            LOCK(cs_main);
+            Misbehaving(pfrom->GetId(), 50, "invalid signature for message");
+            return false;
+        }
+
+        // check one more time for message validity before broadcasting
+        messaging.GetTimeToLive(&nTimeToLive);
+        if (nTimeToLive > 10)
+        {
+            // TODO: Broadcast message to all peers
+        }
+
+        // TODO: check if I'm the recipient and record message
     }
 
     // Ignore unknown commands for extensibility

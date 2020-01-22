@@ -151,6 +151,7 @@ BITCOIN_CORE_H = \
   memusage.h \
   merkleblock.h \
   miner.h \
+  messaging/messaging.h \
   net.h \
   net_permissions.h \
   net_processing.h \
@@ -288,6 +289,7 @@ libbitcoin_server_a_SOURCES = \
   init.cpp \
   dbwrapper.cpp \
   miner.cpp \
+  messaging/messaging.cpp \
   net.cpp \
   net_processing.cpp \
   node/coin.cpp \

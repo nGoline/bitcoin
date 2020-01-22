@@ -230,6 +230,10 @@ extern const char *GETBLOCKTXN;
  * @since protocol version 70014 as described by BIP 152
  */
 extern const char *BLOCKTXN;
+/**
+ * Contains a Messaging message.
+ */
+extern const char *MESSAGING;
 };
 
 /* Get a vector of all valid message types (see above) */
@@ -258,6 +262,11 @@ enum ServiceFlags : uint64_t {
     // serving the last 288 (2 day) blocks
     // See BIP159 for details on how this is implemented.
     NODE_NETWORK_LIMITED = (1 << 10),
+    // NODE_MESSAGING means the node is capable of receiving and broadcasting of messaging related
+    // messages
+    // See more about BIP-NGOLINE-MESSAGINGPROTOCOL on
+    // https://github.com/nGoline/bips/blob/feature/bip-ngoline-messagingprotocol/bip-ngoline-messagingprotocol.mediawiki
+    NODE_MESSAGING = (1 << 30),
 
     // Bits 24-31 are reserved for temporary experiments. Just pick a bit that
     // isn't getting used, or one not being used much, and notify the

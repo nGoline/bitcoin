@@ -1124,6 +1124,9 @@ bool AppInitParameterInteraction()
 
     if (gArgs.GetBoolArg("-peerbloomfilters", DEFAULT_PEERBLOOMFILTERS))
         nLocalServices = ServiceFlags(nLocalServices | NODE_BLOOM);
+    
+    if (gArgs.GetBoolArg("-peermessaging", DEFAULT_PEERMESSAGING))
+        nLocalServices = ServiceFlags(nLocalServices | NODE_MESSAGING);
 
     if (gArgs.GetArg("-rpcserialversion", DEFAULT_RPC_SERIALIZE_VERSION) < 0)
         return InitError("rpcserialversion must be non-negative.");
