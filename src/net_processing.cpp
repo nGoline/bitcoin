@@ -3216,11 +3216,9 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
         return true;
     }
 
-    if (strCommand == NetMsgType::MESSAGING)
-    {
+    if (strCommand == NetMsgType::MESSAGING) {
         // if the peer doesn't offer the service it shouldn't be sending this message
-        if (!(pfrom->GetLocalServices() & NODE_MESSAGING))
-        {
+        if (!(pfrom->GetLocalServices() & NODE_MESSAGING)) {
             pfrom->fDisconnect = true;
             return false;
         }
@@ -3230,8 +3228,8 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
         int nTimeToLive;
         messaging.GetTimeToLive(&nTimeToLive);
-        if (nTimeToLive < 0)
-        {
+        // Account for network delayed message and give 30 seconds treshold
+        if (nTimeToLive < -30) {
             LOCK(cs_main);
             Misbehaving(pfrom->GetId(), 10, strprintf("message was expired for %d seconds", nTimeToLive));
             return false;
@@ -3239,37 +3237,32 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
         std::string error = "";
         CFundingTransaction senderFundingTx;
-        if (!messaging.pSender.ValidateFundingTx(senderFundingTx, error))
-        {
+        if (!messaging.pSender.ValidateFundingTx(senderFundingTx, error)) {
             LOCK(cs_main);
             Misbehaving(pfrom->GetId(), 20, strprintf("locking tx for sender was invalid = %s", nTimeToLive));
             return false;
         }
         
         CFundingTransaction recipientFundingTx;
-        if (messaging.pRecipient.ValidateFundingTx(recipientFundingTx, error))
-        {
+        if (messaging.pRecipient.ValidateFundingTx(recipientFundingTx, error)) {
             LOCK(cs_main);
             Misbehaving(pfrom->GetId(), 10, strprintf("locking tx for recipient was invalid = %s", nTimeToLive));
             return false;
         }
 
-        if (recipientFundingTx.nLockedFor > senderFundingTx.nLockedFor)
-        {
+        if (recipientFundingTx.nLockedFor > senderFundingTx.nLockedFor) {
             LOCK(cs_main);
             Misbehaving(pfrom->GetId(), 50, "sender's locktime is smaller than recipient's");
             return false;
         }
 
-        if (recipientFundingTx.pLockedAmount > senderFundingTx.pLockedAmount)
-        {
+        if (recipientFundingTx.pLockedAmount > senderFundingTx.pLockedAmount) {
             LOCK(cs_main);
             Misbehaving(pfrom->GetId(), 50, "sender's locked amount is smaller than recipient's");
             return false;
         }
 
-        if (!messaging.CheckSignature())
-        {
+        if (!messaging.CheckSignature()) {
             LOCK(cs_main);
             Misbehaving(pfrom->GetId(), 50, "invalid signature for message");
             return false;
@@ -3277,12 +3270,19 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
 
         // check one more time for message validity before broadcasting
         messaging.GetTimeToLive(&nTimeToLive);
-        if (nTimeToLive > 10)
-        {
-            // TODO: Broadcast message to all peers
+        if (nTimeToLive > 0) {
+            connman->ForEachNode([connman, msgMaker, messaging](CNode* pnode) {
+                if(pnode->GetLocalServices() & NODE_MESSAGING) {
+                    connman->PushMessage(pnode, msgMaker.Make(NetMsgType::MESSAGING, messaging));
+                }
+            });
         }
 
-        // TODO: check if I'm the recipient and record message
+#ifdef ENABLE_WALLET
+        if (messaging.IsMine()) messaging.Save();
+#endif
+
+        return true;
     }
 
     // Ignore unknown commands for extensibility

@@ -11,9 +11,14 @@
 #include <util/validation.h>
 #include <validation.h>
 
+#ifdef ENABLE_WALLET
+#include <wallet/wallet.h>
+#endif
+
 bool CMessagingParticipant::ValidateFundingTx(CFundingTransaction& pfundingTx, std::string& error) const
 {
-    if (!pAddress.IsValid()) {
+    pDestination = DecodeDestination(pAddress);
+    if (!IsValidDestination(pDestination)) {
         error = "Address is not valid!";
         return false;
     }
@@ -54,10 +59,8 @@ bool CMessagingParticipant::ValidateFundingTx(CFundingTransaction& pfundingTx, s
 
 bool CMessaging::CheckSignature() const
 {
-    CTxDestination destination = DecodeDestination(pSender.pAddress.ToString());
-    const PKHash* pkhash = boost::get<PKHash>(&destination);
+    const PKHash* pkhash = boost::get<PKHash>(&pSender.pDestination);
     if (!pkhash) return false;
-
 
     bool fInvalid = false;
     std::vector<unsigned char> vchSig = DecodeBase64(pSignature.c_str(), &fInvalid);
@@ -77,4 +80,34 @@ bool CMessaging::CheckSignature() const
 void CMessaging::GetTimeToLive(int* pTimeToLive) const
 {
     *pTimeToLive = GetSystemTimeInSeconds() - nSentOn;
+}
+
+bool CMessaging::IsMine() const
+{
+#ifndef ENABLE_WALLET
+    return false;
+#else
+    bool hasKey = false;
+    auto wallets = GetWallets();
+    for (std::shared_ptr<CWallet> wallet : wallets) {
+        auto spk_man = wallet->GetLegacyScriptPubKeyMan();
+        LOCK(wallet->cs_wallet);
+        AssertLockHeld(spk_man->cs_wallet);
+
+        auto script = GetScriptForDestination(pRecipient.pDestination);
+        if (spk_man->IsMine(script) | ISMINE_SPENDABLE) {
+            hasKey = true;
+            break;
+        }
+    }
+
+    return hasKey;
+#endif
+}
+
+void CMessaging::SaveMessage() const
+{
+#ifdef ENABLE_WALLET
+    // TODO: Decrypt message and save somewhere
+#endif
 }

@@ -6,7 +6,6 @@
 #define BITCOIN_MESSAGING_MESSAGING_H
 
 #include <amount.h>
-#include <protocol.h>
 #include <uint256.h>
 
 class CFundingTransaction
@@ -33,10 +32,12 @@ public:
         nFundingN = 0;
     }
 
-    CAddress pAddress;
+    std::string pAddress;
     uint nFundingBlk;
     uint nFundingTxPos;
     uint nFundingN;
+
+    CTxDestination pDestination;
 
     bool ValidateFundingTx(CFundingTransaction& pfundingTx, std::string& error) const;
 
@@ -68,6 +69,8 @@ public:
 
     void GetTimeToLive(int* pTimeToLive) const;
     bool CheckSignature() const;
+    bool IsMine() const;
+    void SaveMessage() const;
 
     ADD_SERIALIZE_METHODS;
 
